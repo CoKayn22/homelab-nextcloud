@@ -1,0 +1,66 @@
+services:
+  db:
+    image: mysql:8.4
+    container_name: nextcloud_db
+    restart: unless-stopped
+    # READ-COMMITTED lo exige Nextcloud; --skip-log-bin evita que los binlogs llenen el disco
+    command: --transaction-isolation=READ-COMMITTED --skip-log-bin
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: nextcloud_redis
+    restart: unless-stopped
+
+  app:
+    image: nextcloud:33-apache
+    container_name: nextcloud_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8080:80"
+    environment:
+      MYSQL_HOST: db
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: redis
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS}
+      NEXTCLOUD_DATA_DIR: /data
+      PHP_UPLOAD_LIMIT: 10G
+      PHP_MEMORY_LIMIT: 512M
+    volumes:
+      - nextcloud_html:/var/www/html
+      - /srv/nextcloud-data:/data
+
+  cron:
+    image: nextcloud:33-apache
+    container_name: nextcloud_cron
+    restart: unless-stopped
+    depends_on:
+      - app
+    entrypoint: /cron.sh
+    volumes:
+      - nextcloud_html:/var/www/html
+      - /srv/nextcloud-data:/data
+
+volumes:
+  db_data:
+  nextcloud_html:

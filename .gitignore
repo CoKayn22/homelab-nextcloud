@@ -1,0 +1,9 @@
+# Secretos y configuración local
+.env
+
+# Copias de seguridad y logs
+*.sql
+*.log
+
+# Sistema
+.DS_Store
